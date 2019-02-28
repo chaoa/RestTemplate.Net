@@ -16,10 +16,10 @@ using Polly.Timeout;
 
 namespace RestTemplate
 {
-    public class RestTemplate : IHttpClient
+    public class RestHttpClient : IHttpClient
     {
         private readonly HttpClient _httpClient;
-        private readonly ILogger<RestTemplate> _logger;
+        private readonly ILogger<RestHttpClient> _logger;
         private ConcurrentDictionary<string, AsyncPolicyWrap> _policyWraps;//polly容器
         private ConcurrentDictionary<string, List<string>> _hosts;//缓存服务注册表，定时刷新
 
@@ -27,18 +27,19 @@ namespace RestTemplate
         private readonly string _consulServerUrl;
         private PolicyConfiguration _policyConfiguration;
 
-        public RestTemplate()
+        public RestHttpClient(PolicyConfiguration policyConfiguration, ILogger<RestHttpClient> logger)
         {
-
+            _policyWraps=new ConcurrentDictionary<string, AsyncPolicyWrap>();
+            _policyConfiguration = policyConfiguration;
         }
 
 
-        public Task<RestTemplateResponse<T>> DeleteAsync<T>(string url, HttpRequestHeaders requestHeaders = null, object body = null)
+        public Task<RestResponse<T>> DeleteAsync<T>(string url, HttpRequestHeaders requestHeaders = null, object body = null)
         {
             throw new NotImplementedException();
         }
 
-        public async Task<RestTemplateResponse<T>> GetAsync<T>(string url, HttpRequestHeaders requestHeaders = null)
+        public async Task<RestResponse<T>> GetAsync<T>(string url, HttpRequestHeaders requestHeaders = null)
         {
             Uri uri = new Uri(url);
             string serviceName = uri.Host;
@@ -55,7 +56,7 @@ namespace RestTemplate
                 httpRequestMessage.Method =HttpMethod.Get;
 
                 //通过polly调用实际的请求
-                RestTemplateResponse<T> restTemplateResponse = null;
+                RestResponse<T> restTemplateResponse = null;
                  await HttpInvoker(serviceName, async (pollyContext) =>
                  {
                      var failHosts = pollyContext["failHosts"] as List<string>;
@@ -69,12 +70,12 @@ namespace RestTemplate
             }
         }
 
-        public Task<RestTemplateResponse<T>> PostAsync<T>(string url, HttpRequestHeaders requestHeaders = null, object body = null)
+        public Task<RestResponse<T>> PostAsync<T>(string url, HttpRequestHeaders requestHeaders = null, object body = null)
         {
             throw new NotImplementedException();
         }
 
-        public Task<RestTemplateResponse<T>> PutAsync<T>(string url, HttpRequestHeaders requestHeaders = null, object body = null)
+        public Task<RestResponse<T>> PutAsync<T>(string url, HttpRequestHeaders requestHeaders = null, object body = null)
         {
             throw new NotImplementedException();
         }
@@ -132,10 +133,10 @@ namespace RestTemplate
         }
 
 
-        private async Task<RestTemplateResponse<T>> SendAsync<T>(HttpRequestMessage httpRequestMessage)
+        private async Task<RestResponse<T>> SendAsync<T>(HttpRequestMessage httpRequestMessage)
         {
             var httpResponseMessage = await _httpClient.SendAsync(httpRequestMessage);
-            RestTemplateResponse<T> restTemplateResponse = new RestTemplateResponse<T>();
+            RestResponse<T> restTemplateResponse = new RestResponse<T>();
             restTemplateResponse.StatusCode = httpResponseMessage.StatusCode;
             restTemplateResponse.Headers = httpResponseMessage.Headers;
             string bodyStr = await httpResponseMessage.Content.ReadAsStringAsync();
@@ -144,71 +145,77 @@ namespace RestTemplate
             return restTemplateResponse;
         }
 
+        /// <summary>
+        /// 弹性策略为：超时、熔断、重试
+        /// PolicyWrap commonResilience = Policy.Wrap(retry, breaker, timeout);
+        /// </summary>
+        /// <param name="serviceName"></param>
+        /// <returns></returns>
+        public AsyncPolicyWrap CreatePolicyWrap(string serviceName)
+        {
+            List<IAsyncPolicy> policyList = new List<IAsyncPolicy>();
+            //重试  失败自动切换服务器重试，当出现失败，重试其它服务器，已在获取服务器地址中实现
+            if (_policyConfiguration.MaxRetryCount > 0)
+            {
+                var policyRetry = Policy.Handle<Exception>().WaitAndRetryAsync
+                    (
+                        _policyConfiguration.MaxRetryCount,
+                        i => TimeSpan.FromMilliseconds(_policyConfiguration.RetryIntervalMilliseconds),
+                        async (exception, timeSpan, pollyContext) =>
+                        {
+                            var failHosts = pollyContext["failHosts"] as List<string>;
+                            string currentHost = pollyContext["currentHost"].ToString();
+                            if (failHosts == null)
+                                failHosts = new List<string>() { currentHost };
+                            else
+                                failHosts.Add(currentHost);
+                            pollyContext["failHosts"] = failHosts;
 
+                            _logger.LogTrace("polly开启了重试");
+                        }
+                    );
+                policyList.Add(policyRetry);
+            }
+            //熔断
+            if (_policyConfiguration.EnableCircuitBreaker)
+            {
+                var policyCircuit = Policy.Handle<Exception>().CircuitBreakerAsync
+                    (
+                        _policyConfiguration.AllowedCountBeforeBreaking,
+                        TimeSpan.FromMilliseconds(_policyConfiguration.BreakingMilliseconds),
+                        (ex, time) =>
+                        {
+                            _logger.LogTrace("polly打开了熔断器");
+                        }, () =>
+                        {
+                            _logger.LogTrace("polly重置了熔断器");
+                        }
+                    );
+                policyList.Add(policyCircuit);
+            }
+            //超时 优先级最高
+            if (_policyConfiguration.TimeOutMilliseconds > 0)
+            {
+                var policyTimeout = Policy.TimeoutAsync
+                    (
+                        TimeSpan.FromMilliseconds(_policyConfiguration.TimeOutMilliseconds),
+                        TimeoutStrategy.Pessimistic,
+                        async (a, b, c) =>
+                        {
+                            _logger.LogTrace("polly开启了超时");
+                        }
+                    );
+                policyList.Add(policyTimeout);
+            }
 
-        private async Task HttpInvoker(string serviceName,Func<Context,Task> func)
+            return Policy.WrapAsync(policyList.ToArray());
+        }
+
+        public async Task HttpInvoker(string serviceName,Func<Context,Task> func)
         {
             if (!_policyWraps.TryGetValue(serviceName, out AsyncPolicyWrap policyWrap))
             {
-                //弹性策略为：超时、熔断、重试
-                //PolicyWrap commonResilience = Policy.Wrap(retry, breaker, timeout);
-                List<IAsyncPolicy> policyList = new List<IAsyncPolicy>();
-
-                //重试  失败自动切换服务器重试，当出现失败，重试其它服务器，已在获取服务器地址中实现
-                if (_policyConfiguration.MaxRetryCount > 0)
-                {
-                    var policyRetry = Policy.Handle<Exception>().WaitAndRetryAsync
-                        (
-                            _policyConfiguration.MaxRetryCount,
-                            i => TimeSpan.FromMilliseconds(_policyConfiguration.RetryIntervalMilliseconds),
-                            async (exception, timeSpan, pollyContext) =>
-                            {
-                                var failHosts = pollyContext["failHosts"] as List<string>;
-                                string currentHost = pollyContext["currentHost"].ToString();
-                                if (failHosts == null)
-                                    failHosts = new List<string>() { currentHost };
-                                else
-                                    failHosts.Add(currentHost);
-                                pollyContext["failHosts"] = failHosts;
-
-                                _logger.LogTrace("polly开启了重试");
-                            }
-                        );
-                    policyList.Add(policyRetry);
-                }
-                //熔断
-                if (_policyConfiguration.EnableCircuitBreaker)
-                {
-                    var policyCircuit = Policy.Handle<Exception>().CircuitBreakerAsync
-                        (
-                            _policyConfiguration.AllowedCountBeforeBreaking,
-                            TimeSpan.FromMilliseconds(_policyConfiguration.BreakingMilliseconds),
-                            (ex,time) =>
-                            {
-                                _logger.LogTrace("polly打开了熔断器");
-                            },() =>
-                            {
-                                _logger.LogTrace("polly重置了熔断器");
-                            }
-                        );
-                    policyList.Add(policyCircuit);
-                }
-                //超时 优先级最高
-                if (_policyConfiguration.TimeOutMilliseconds > 0)
-                {
-                    var policyTimeout = Policy.TimeoutAsync
-                        (
-                            TimeSpan.FromMilliseconds(_policyConfiguration.TimeOutMilliseconds),
-                            TimeoutStrategy.Pessimistic,
-                            async (a, b, c) =>
-                            {
-                                _logger.LogTrace("polly开启了超时");
-                            }
-                        );
-                    policyList.Add(policyTimeout);
-                }
-
-                policyWrap = Policy.WrapAsync(policyList.ToArray());
+                policyWrap = CreatePolicyWrap(serviceName);
                 _policyWraps.TryAdd(serviceName, policyWrap);
             }
 
