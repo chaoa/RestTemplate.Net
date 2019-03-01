@@ -6,7 +6,7 @@ using System.Text;
 
 namespace RestTemplate
 {
-    public class RestTemplateResponse<T>
+    public class RestResponse<T>
     {
         /// <summary>
         /// 响应状态码

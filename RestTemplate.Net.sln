@@ -7,11 +7,11 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{71617D85-2C7
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "test", "test", "{304B4E9F-4795-43AF-848E-4045F4113276}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RestTemplate", "src\RestTemplate.Net\RestTemplate\RestTemplate.csproj", "{1C4496C4-61E5-47B2-A552-B4FD6E17F9F4}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RestTemplate", "src\RestTemplate.Net\RestTemplate\RestTemplate.csproj", "{1C4496C4-61E5-47B2-A552-B4FD6E17F9F4}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RestTemplateUnitTest", "test\RestTemplateUnitTest\RestTemplateUnitTest.csproj", "{02646F50-9306-4B0D-84E5-7B782027AFCA}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RestTemplateUnitTest", "test\RestTemplateUnitTest\RestTemplateUnitTest.csproj", "{02646F50-9306-4B0D-84E5-7B782027AFCA}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RestTemplateIntegrationTest", "test\RestTemplateIntegrationTest\RestTemplateIntegrationTest.csproj", "{5461C969-C620-43BC-A6D9-6106A6804B1D}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RestTemplateIntegrationTest", "test\RestTemplateIntegrationTest\RestTemplateIntegrationTest.csproj", "{5461C969-C620-43BC-A6D9-6106A6804B1D}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

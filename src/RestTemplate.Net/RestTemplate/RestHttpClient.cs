@@ -16,10 +16,10 @@ using Polly.Timeout;
 
 namespace RestTemplate
 {
-    public class RestTemplate : IHttpClient
+    public class RestHttpClient : IHttpClient
     {
         private readonly HttpClient _httpClient;
-        private readonly ILogger<RestTemplate> _logger;
+        private readonly ILogger<RestHttpClient> _logger;
         private ConcurrentDictionary<string, AsyncPolicyWrap> _policyWraps;//polly容器
         private ConcurrentDictionary<string, List<string>> _hosts;//缓存服务注册表，定时刷新
 
@@ -27,18 +27,18 @@ namespace RestTemplate
         private readonly string _consulServerUrl;
         private PolicyConfiguration _policyConfiguration;
 
-        public RestTemplate()
+        public RestHttpClient()
         {
 
         }
 
 
-        public Task<RestTemplateResponse<T>> DeleteAsync<T>(string url, HttpRequestHeaders requestHeaders = null, object body = null)
+        public Task<RestResponse<T>> DeleteAsync<T>(string url, HttpRequestHeaders requestHeaders = null, object body = null)
         {
             throw new NotImplementedException();
         }
 
-        public async Task<RestTemplateResponse<T>> GetAsync<T>(string url, HttpRequestHeaders requestHeaders = null)
+        public async Task<RestResponse<T>> GetAsync<T>(string url, HttpRequestHeaders requestHeaders = null)
         {
             Uri uri = new Uri(url);
             string serviceName = uri.Host;
@@ -55,7 +55,7 @@ namespace RestTemplate
                 httpRequestMessage.Method =HttpMethod.Get;
 
                 //通过polly调用实际的请求
-                RestTemplateResponse<T> restTemplateResponse = null;
+                RestResponse<T> restTemplateResponse = null;
                  await HttpInvoker(serviceName, async (pollyContext) =>
                  {
                      var failHosts = pollyContext["failHosts"] as List<string>;
@@ -69,12 +69,12 @@ namespace RestTemplate
             }
         }
 
-        public Task<RestTemplateResponse<T>> PostAsync<T>(string url, HttpRequestHeaders requestHeaders = null, object body = null)
+        public Task<RestResponse<T>> PostAsync<T>(string url, HttpRequestHeaders requestHeaders = null, object body = null)
         {
             throw new NotImplementedException();
         }
 
-        public Task<RestTemplateResponse<T>> PutAsync<T>(string url, HttpRequestHeaders requestHeaders = null, object body = null)
+        public Task<RestResponse<T>> PutAsync<T>(string url, HttpRequestHeaders requestHeaders = null, object body = null)
         {
             throw new NotImplementedException();
         }
@@ -132,10 +132,10 @@ namespace RestTemplate
         }
 
 
-        private async Task<RestTemplateResponse<T>> SendAsync<T>(HttpRequestMessage httpRequestMessage)
+        private async Task<RestResponse<T>> SendAsync<T>(HttpRequestMessage httpRequestMessage)
         {
             var httpResponseMessage = await _httpClient.SendAsync(httpRequestMessage);
-            RestTemplateResponse<T> restTemplateResponse = new RestTemplateResponse<T>();
+            RestResponse<T> restTemplateResponse = new RestResponse<T>();
             restTemplateResponse.StatusCode = httpResponseMessage.StatusCode;
             restTemplateResponse.Headers = httpResponseMessage.Headers;
             string bodyStr = await httpResponseMessage.Content.ReadAsStringAsync();
@@ -217,7 +217,7 @@ namespace RestTemplate
 
 
 
-
+        
 
 
     }
