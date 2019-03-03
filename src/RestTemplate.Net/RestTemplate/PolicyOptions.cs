@@ -4,7 +4,7 @@ using System.Text;
 
 namespace RestTemplate
 {
-    public class PolicyConfiguration
+    public class PolicyOptions
     {
         /// <summary>
         /// 最多重试几次，如果为0则不重试

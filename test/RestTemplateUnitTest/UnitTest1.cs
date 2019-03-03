@@ -1,16 +1,34 @@
+using DnsClient;
 using Polly;
 using Polly.Timeout;
 using Polly.Wrap;
 using RestTemplate;
 using System;
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
+
 
 namespace RestTemplateUnitTest
 {
     public class UnitTest1
     {
+        [Fact]
+        public async  Task  Test()
+        {
+            try
+            {
+                var dnsQuery = new LookupClient(IPAddress.Parse("127.0.0.1"), 8600);
+                var hostList = await dnsQuery.ResolveServiceAsync("service.consul", "UnitTestService");
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+                throw;
+            }
+        }
+
         //[Fact]
         //public void Test1()
         //{
